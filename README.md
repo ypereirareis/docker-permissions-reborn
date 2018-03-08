@@ -1,6 +1,6 @@
-# Docker volumes and permissions
+# Docker volumes and permissions (Reborn)
 
-[![Build Status](https://travis-ci.org/ypereirareis/docker-permissions.svg?branch=master)](https://travis-ci.org/ypereirareis/docker-permissions)
+[![Build Status](https://travis-ci.org/ypereirareis/docker-permissions-reborn.svg?branch=master)](https://travis-ci.org/ypereirareis/docker-permissions-reborn)
 
 This repository shows you a way to deal with read/write/exec permissions
 and how to define user and group ids using volumes from the host, when running containers.
@@ -37,9 +37,9 @@ add a custom entry point to deal with permissions.
 
 We have a problem if we use a volume to share our code from host to container.
 
-* The user running `php-fpm` in the container is `wwww-data` with `uid=100` and `gid=101`.
+* The user running `php-fpm` in the container is `wwww-data` with `uid=82` and `gid=82`.
 * Our host user often has `uid=1000` and `gid=1000` but not always.
-* The `nginx` user will not be able to read/write/exec files from the volume if permissions are not defined properly.
+* The `www-data` user will not be able to read/write/exec files from the volume if permissions are not defined properly.
 
 But I do not recommend to change permissions with `chmod` directly.
 The way I recommend is to change the owner of the shared directory to map uid and gid of the container user
@@ -50,64 +50,37 @@ to the host user.
 The interesting part of the Dockerfile is this one:
 
 ```bash
-ARG PROJECT_DIR_ARG='/usr/share/nginx/html'
-ENV PROJECT_DIR=$PROJECT_DIR_ARG
-
 RUN mkdir -p $PROJECT_DIR
 COPY ./project $PROJECT_DIR
 RUN chown -R www-data:www-data $PROJECT_DIR
+WORKDIR $PROJECT_DIR
+USER www-data
 ```
 
-* In the entry point we are checking if uid and gid of the container user `nginx` must be changed.
-
-```bash
-# --
-PHP_UID_DEFAULT=$(id -u www-data)
-
-# Here we check if GID and UID are already defined properly or not
-# i.e Do we have a volume mounted and with a different uid/gid ?
-if [[ -z "$(ls -n $PROJECT_DIR | grep $PHP_UID_DEFAULT)" ]]; then
-
-    : ${PHP_UID:=$(id -u www-data)}
-    : ${PHP_GID:=$(id -g www-data)}
-
-    export PHP_UID
-    export PHP_GID
-
-    if [ "$PHP_UID" != "0" ] && [ "$PHP_UID" != "$(id -u www-data)" ]; then
-      echo "Need to change UID and GID."
-      usermod  -u $PHP_UID www-data
-      groupmod -g $PHP_GID www-data
-      chown -R www-data:www-data $PROJECT_DIR
-      echo "UID and GID changed to $PHP_UID and $PHP_GID."
-    fi
-else
-    echo "UID and GUI are OK !"
-fi
-```
-
-* The possible new values are coming from environment variables.
+* Change the user uid when using a volume, the possible new values are coming from environment variables.
 
 ```yaml
-php:
+version: '3'
+services:
+  php:
     build:
       context: .
-    environment:
-      - PHP_UID=${PHPUID}
-      - PHP_GID=${PHPGID}
+    container_name: ypr-permissions-php
+    user: ${PHPUID}
+    volumes:
+      - ./project:/usr/share/nginx/html
 ```
 
 * We can define per-host custom UID/GID environment varaibles with a `.env` file.
 
 ```bash
 PHPUID=1000
-PHPGID=1000
 ```
 
 # Run the demo
 
 ```bash
-$ git clone git@github.com:ypereirareis/docker-permissions.git && cd docker-permissions
+$ git clone git@github.com:ypereirareis/docker-permissions-reborn.git && cd docker-permissions-reborn
 ```
 
 * Copy `.env.dist` to `.env` and set your uid and gid values.
@@ -127,17 +100,20 @@ $ docker-compose build
 
 ```bash
 $ docker-compose up
-Starting ypr-permissions-php ... 
-Starting ypr-permissions-php ... done
-Recreating ypr-permissions-nginx ... 
-Recreating ypr-permissions-nginx ... done
-Attaching to ypr-permissions-php, ypr-permissions-nginx
-ypr-permissions-php | UID and GUI are OK !
-ypr-permissions-php | [07-Mar-2018 16:35:37] NOTICE: fpm is running, pid 1
-ypr-permissions-php | [07-Mar-2018 16:35:37] NOTICE: ready to handle connections
+Starting ypr-permissions-reborn-php ... 
+Starting ypr-permissions-reborn-php ... done
+Starting ypr-permissions-reborn-nginx ... 
+Starting ypr-permissions-reborn-nginx ... done
+Attaching to ypr-permissions-reborn-php, ypr-permissions-reborn-nginx
+ypr-permissions-reborn-php | [08-Mar-2018 16:45:35] NOTICE: [pool www] 'user' directive is ignored when FPM is not running as root
+ypr-permissions-reborn-php | [08-Mar-2018 16:45:35] NOTICE: [pool www] 'user' directive is ignored when FPM is not running as root
+ypr-permissions-reborn-php | [08-Mar-2018 16:45:35] NOTICE: [pool www] 'group' directive is ignored when FPM is not running as root
+ypr-permissions-reborn-php | [08-Mar-2018 16:45:35] NOTICE: [pool www] 'group' directive is ignored when FPM is not running as root
+ypr-permissions-reborn-php | [08-Mar-2018 16:45:35] NOTICE: fpm is running, pid 1
+ypr-permissions-reborn-php | [08-Mar-2018 16:45:35] NOTICE: ready to handle connections
 ```
 
-Go to [http://127.0.0.1:8888/](http://127.0.0.1:8888/)
+Go to [http://127.0.0.1:8889/](http://127.0.0.1:8889/)
 
 If everything is ok, you should see:
 

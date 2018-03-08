@@ -1,7 +1,8 @@
 #!/bin/sh -ex
 
-URI='http://127.0.0.1:8888/'
+URI='http://127.0.0.1:8889/'
 
+docker-compose stop || true
 docker-compose rm -f || true
 docker-compose build
 docker-compose up -d
