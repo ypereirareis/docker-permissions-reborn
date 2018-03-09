@@ -8,5 +8,3 @@ COPY ./project $PROJECT_DIR
 RUN chown -R www-data:www-data $PROJECT_DIR
 WORKDIR $PROJECT_DIR
 USER www-data
-
-CMD ["php-fpm"]
